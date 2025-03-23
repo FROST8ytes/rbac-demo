@@ -9,10 +9,7 @@ const bodySchema = z.object({
 });
 
 export default defineEventHandler(async (event) => {
-  const { username, password } = await readValidatedBody(
-    event,
-    bodySchema.parse
-  );
+  const { username, password } = await readValidatedBody(event, bodySchema.parse);
 
   try {
     const result = await db
@@ -24,24 +21,29 @@ export default defineEventHandler(async (event) => {
       })
       .from(employees)
       .where(
-        and(
-          eq(employees.employee_user_name, username),
-          eq(employees.employee_password, password)
-        )
+        and(eq(employees.employee_user_name, username), eq(employees.employee_password, password))
       )
-      .leftJoin(
-        employeeRoles,
-        eq(employees.employee_role, employeeRoles.role_id)
-      );
+      .leftJoin(employeeRoles, eq(employees.employee_role, employeeRoles.role_id));
 
-    await setUserSession(event, {
+    if (result.length !== 1) {
+      throw createError({ statusCode: 401, statusMessage: "Invalid credentials" });
+    }
+
+    await replaceUserSession(event, {
       user: {
         full_name: result[0].employee_full_name,
         username: result[0].employee_user_name,
         role: result[0].employee_role,
       },
     });
-    return {};
+
+    return {
+      user: {
+        full_name: result[0].employee_full_name,
+        username: result[0].employee_user_name,
+        role: result[0].employee_role,
+      },
+    };
   } catch (e: any) {
     throw createError({
       statusCode: 400,
